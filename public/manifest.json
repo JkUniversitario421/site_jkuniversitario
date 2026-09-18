@@ -1,0 +1,37 @@
+{
+  "name": "JK Universitário - Pousada para Estudantes UFRGS",
+  "short_name": "JK Universitário",
+  "description": "Espaço exclusivo para estudantes e professores universitários da UFRGS, próximo ao Campus do Vale em Viamão/RS.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1f7e48",
+  "theme_color": "#1f7e48",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["housing", "education", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "Ver Acomodações",
+      "url": "/#acomodacoes",
+      "description": "Veja as 16 unidades habitacionais disponíveis"
+    },
+    {
+      "name": "Sobre a Pousada",
+      "url": "/#informacoes",
+      "description": "Localização, regras e contato"
+    }
+  ]
+}

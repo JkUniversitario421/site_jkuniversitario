@@ -1,0 +1,107 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Estilos globais da plataforma JK Universitário
+ * Define a base visual que se aplica a todas as páginas
+ */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Esconde a barra de rolagem horizontal para elementos de scroll lateral (stories) */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  /* Card com elevação suave, usado nos cards de acomodação */
+  .card-base {
+    @apply rounded-2xl bg-white shadow-sm ring-1 ring-gray-200/60 transition-all duration-300;
+  }
+  .dark .card-base {
+    @apply bg-gray-900 ring-gray-800/60;
+  }
+  /* No modo P&B, remove cores e usa apenas tons de cinza */
+  .pb .card-base {
+    @apply bg-white ring-gray-300;
+  }
+
+  /* Botão primário com a cor institucional */
+  .btn-primario {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-primaria-600 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-primaria-700 active:scale-95;
+  }
+  .pb .btn-primario {
+    @apply bg-gray-900 hover:bg-gray-800;
+  }
+
+  /* Botão secundário para ações alternativas */
+  .btn-secundario {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-gray-100 px-5 py-3 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-200 active:scale-95;
+  }
+  .dark .btn-secundario {
+    @apply bg-gray-800 text-gray-200 hover:bg-gray-700;
+  }
+  .pb .btn-secundario {
+    @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+  }
+
+  /* Tag de status */
+  .tag-disponivel {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700;
+  }
+  .tag-ocupado {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700;
+  }
+  .tag-reservado {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700;
+  }
+  /* No modo P&B, as tags usam apenas tons de cinza com diferença de textura */
+  .pb .tag-disponivel,
+  .pb .tag-ocupado,
+  .pb .tag-reservado {
+    @apply bg-gray-200 text-gray-800;
+  }
+}
+
+/* ====== MODO PRETO E BRANCO (ALTO CONTRASTE) ======
+ * A classe "pb" no <html> ativa o modo P&B.
+ * Remove todas as cores e usa apenas preto, branco e tons de cinza.
+ */
+.pb * {
+  filter: grayscale(100%) contrast(1.15) !important;
+}
+.pb img {
+  filter: grayscale(100%) contrast(1.1) !important;
+}
+
+/* Transição suave entre temas */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
+}
+
+/* Animação de shimmer para skeletons de carregamento */
+.skeleton {
+  @apply animate-shimmer bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 bg-[length:1000px_100%];
+}
+.dark .skeleton {
+  @apply from-gray-800 via-gray-700 to-gray-800;
+}
