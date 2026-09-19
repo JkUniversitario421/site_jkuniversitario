@@ -2,16 +2,28 @@
  * Página PaginaPublicadorStories — gerenciar e publicar stories/destaques
  *
  * Funcionalidades:
- * - Lista os stories existentes com opção de ativar/desativar e remover
- * - Formulário para criar um novo story: upload de imagem, título, descrição, link
- * - Upload de imagem para o bucket de Storage
- * - Ao publicar um novo story, dispara uma notificação push (opcional)
+ * - Lista os stories existentes do Firestore (ativos e inativos)
+ * - Alterna visibilidade (ativo/inativo) e remoção de registros
+ * - Formulário para criar novo story com upload de imagem no Firebase Storage
+ * - Disparo opcional de notificações
  */
 import { useEffect, useState } from 'react';
 import {
   Loader2, Plus, Trash2, Upload, X, Check, AlertCircle, Eye, EyeOff, Bell, Image as ImageIcon,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  orderBy,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '@/lib/firebase';
 import { Story } from '@/lib/tipos';
 import SEO from '@/components/SEO';
 
@@ -31,46 +43,62 @@ export default function PaginaPublicadorStories() {
   const [salvando, setSalvando] = useState(false);
   const [subindoImagem, setSubindoImagem] = useState(false);
 
-  /** Carrega os stories do banco (todos, incluindo inativos) */
+  /** Carrega os stories do Firestore (ordenados por criado_em desc ou ordenação local) */
   async function carregar() {
     setCarregando(true);
-    const { data, error } = await supabase
-      .from('stories')
-      .select('*')
-      .order('criado_em', { ascending: false });
+    try {
+      const colecaoStories = collection(db, 'stories');
+      let docsResult;
 
-    if (error) {
+      try {
+        const q = query(colecaoStories, orderBy('criado_em', 'desc'));
+        const snapshot = await getDocs(q);
+        docsResult = snapshot.docs;
+      } catch (indexError) {
+        console.warn('Fallback: buscando stories sem ordenação de índice no Firestore.', indexError);
+        const snapshot = await getDocs(colecaoStories);
+        docsResult = snapshot.docs;
+      }
+
+      const lista = docsResult.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })) as Story[];
+
+      // Garantia de ordenação no cliente caso o índice do Firestore não esteja criado
+      lista.sort((a, b) => {
+        const tA = a.criado_em?.seconds ?? 0;
+        const tB = b.criado_em?.seconds ?? 0;
+        return tB - tA;
+      });
+
+      setStories(lista);
+    } catch (err: any) {
+      console.error('Erro ao carregar stories:', err);
       setErro('Erro ao carregar stories.');
+    } finally {
       setCarregando(false);
-      return;
     }
-    setStories(data as Story[]);
-    setCarregando(false);
   }
 
   useEffect(() => {
     carregar();
   }, []);
 
-  /** Faz upload da imagem do story para o Storage */
+  /** Faz upload da imagem do story para o Firebase Storage */
   async function subirImagem(arquivo: File): Promise<string | null> {
-    const ext = arquivo.name.split('.').pop();
-    const nomeArquivo = `stories/${Date.now()}.${ext}`;
+    try {
+      const ext = arquivo.name.split('.').pop();
+      const caminhoStorage = `stories/${Date.now()}.${ext}`;
+      const storageRef = ref(storage, caminhoStorage);
 
-    const { error } = await supabase.storage
-      .from('fotos-jk')
-      .upload(nomeArquivo, arquivo);
-
-    if (error) {
-      setErro('Erro ao subir imagem: ' + error.message);
+      await uploadBytes(storageRef, arquivo);
+      const url = await getDownloadURL(storageRef);
+      return url;
+    } catch (err: any) {
+      setErro('Erro ao subir imagem: ' + (err.message || 'Falha no Storage'));
       return null;
     }
-
-    const { data } = supabase.storage
-      .from('fotos-jk')
-      .getPublicUrl(nomeArquivo);
-
-    return data.publicUrl;
   }
 
   /** Processa o upload de imagem do formulário */
@@ -85,7 +113,7 @@ export default function PaginaPublicadorStories() {
     e.target.value = '';
   }
 
-  /** Publica um novo story no banco */
+  /** Publica um novo story no Firestore */
   async function publicarStory() {
     if (!titulo.trim() || !imagemUrl) {
       setErro('Preencha o título e selecione uma imagem.');
@@ -95,99 +123,82 @@ export default function PaginaPublicadorStories() {
     setSalvando(true);
     setErro(null);
 
-    const { error } = await supabase.from('stories').insert({
-      titulo: titulo.trim(),
-      descricao: descricao.trim(),
-      imagem: imagemUrl,
-      link: link.trim() || null,
-      ativo: true,
-    });
+    try {
+      const colecaoStories = collection(db, 'stories');
+      await addDoc(colecaoStories, {
+        titulo: titulo.trim(),
+        descricao: descricao.trim() || null,
+        imagem: imagemUrl,
+        imagem_url: imagemUrl, // Mantém compatibilidade com ambos os campos
+        link: link.trim() || null,
+        ativo: true,
+        criado_em: serverTimestamp(),
+      });
 
-    if (error) {
-      setErro('Erro ao publicar story: ' + error.message);
+      if (enviarNotificacao) {
+        await dispararNotificacaoPush(
+          titulo.trim(),
+          descricao.trim() || 'Novo destaque disponível no app!'
+        );
+      }
+
+      // Limpa o formulário
+      setTitulo('');
+      setDescricao('');
+      setLink('');
+      setImagemUrl('');
+      setEnviarNotificacao(true);
+      setMostrarForm(false);
+      setSucesso(true);
+      carregar();
+
+      setTimeout(() => setSucesso(false), 3000);
+    } catch (err: any) {
+      console.error('Erro ao publicar story:', err);
+      setErro('Erro ao publicar story: ' + (err.message || 'Erro no banco de dados.'));
+    } finally {
       setSalvando(false);
-      return;
     }
-
-    // Se marcado, dispara notificação push para os usuários
-    if (enviarNotificacao) {
-      await dispararNotificacaoPush(titulo.trim(), descricao.trim() || 'Novo destaque disponível no app!');
-    }
-
-    // Limpa o formulário
-    setTitulo('');
-    setDescricao('');
-    setLink('');
-    setImagemUrl('');
-    setEnviarNotificacao(true);
-    setMostrarForm(false);
-    setSucesso(true);
-    setSalvando(false);
-    carregar();
-
-    setTimeout(() => setSucesso(false), 3000);
   }
 
   /** Alterna o status ativo/inativo de um story */
   async function alternarAtivo(story: Story) {
-    const { error } = await supabase
-      .from('stories')
-      .update({ ativo: !story.ativo })
-      .eq('id', story.id);
-
-    if (error) {
+    try {
+      const docRef = doc(db, 'stories', story.id);
+      await updateDoc(docRef, { ativo: !story.ativo });
+      carregar();
+    } catch (err) {
+      console.error('Erro ao atualizar status:', err);
       setErro('Erro ao atualizar story.');
-      return;
     }
-    carregar();
   }
 
-  /** Remove um story do banco */
+  /** Remove um story do Firestore */
   async function removerStory(story: Story) {
     if (!confirm(`Remover o story "${story.titulo}"?`)) return;
 
-    const { error } = await supabase
-      .from('stories')
-      .delete()
-      .eq('id', story.id);
-
-    if (error) {
+    try {
+      const docRef = doc(db, 'stories', story.id);
+      await deleteDoc(docRef);
+      carregar();
+    } catch (err) {
+      console.error('Erro ao remover story:', err);
       setErro('Erro ao remover story.');
-      return;
     }
-    carregar();
   }
 
-  /**
-   * Dispara uma notificação push para todos os dispositivos inscritos.
-   * Chama a Edge Function que processa o envio via Web Push.
-   */
+  /** Registra a notificação na coleção 'notificacoes' do Firestore */
   async function dispararNotificacaoPush(tituloNotif: string, corpoNotif: string) {
     try {
-      // Registra a notificação no banco
-      await supabase.from('notificacoes').insert({
+      const colecaoNotif = collection(db, 'notificacoes');
+      await addDoc(colecaoNotif, {
         titulo: tituloNotif,
         corpo: corpoNotif,
         enviada: false,
+        criado_em: serverTimestamp(),
       });
-
-      // Chama a Edge Function para enviar o push
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/enviar-push`;
-      const resposta = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ titulo: tituloNotif, corpo: corpoNotif }),
-      });
-
-      if (!resposta.ok) {
-        console.warn('Aviso: notificação push não pôde ser enviada.', resposta.status);
-      }
     } catch (err) {
-      // Não bloqueia a publicação se a notificação falhar
-      console.warn('Aviso: erro ao disparar push:', err);
+      console.warn('Aviso: erro ao registrar notificação:', err);
     }
   }
 
@@ -258,7 +269,7 @@ export default function PaginaPublicadorStories() {
                   </button>
                 </div>
               ) : (
-                <label className="flex h-40 w-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-primaria-500 hover:text-primaria-500 dark:border-gray-700">
+                <label className="flex h-40 w-40 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 text-gray-400 hover:border-amber-500 hover:text-amber-500 dark:border-gray-700">
                   {subindoImagem ? (
                     <Loader2 className="h-6 w-6 animate-spin" />
                   ) : (
@@ -314,10 +325,10 @@ export default function PaginaPublicadorStories() {
                 type="checkbox"
                 checked={enviarNotificacao}
                 onChange={(e) => setEnviarNotificacao(e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-primaria-600 focus:ring-primaria-500"
+                className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
               />
               <Bell className="h-4 w-4" />
-              Enviar notificação push para os usuários
+              Enviar notificação para os usuários
             </label>
 
             {/* Botão publicar */}
@@ -342,42 +353,51 @@ export default function PaginaPublicadorStories() {
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {stories.map((story) => (
-              <div key={story.id} className="card-base overflow-hidden">
-                <div className="relative h-32">
-                  <img src={story.imagem} alt={story.titulo} className="h-full w-full object-cover" />
-                  <div className="absolute right-2 top-2">
-                    {story.ativo ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-green-500/90 px-2 py-0.5 text-xs font-semibold text-white">
-                        <Eye className="h-3 w-3" /> Ativo
-                      </span>
+            {stories.map((story) => {
+              const srcImagem = story.imagem || story.imagem_url;
+              return (
+                <div key={story.id} className="card-base overflow-hidden">
+                  <div className="relative h-32">
+                    {srcImagem ? (
+                      <img src={srcImagem} alt={story.titulo} className="h-full w-full object-cover" />
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-500/90 px-2 py-0.5 text-xs font-semibold text-white">
-                        <EyeOff className="h-3 w-3" /> Oculto
-                      </span>
+                      <div className="flex h-full w-full items-center justify-center bg-gray-100 dark:bg-gray-800">
+                        <ImageIcon className="h-8 w-8 text-gray-400" />
+                      </div>
                     )}
+                    <div className="absolute right-2 top-2">
+                      {story.ativo ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-500/90 px-2 py-0.5 text-xs font-semibold text-white">
+                          <Eye className="h-3 w-3" /> Ativo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-500/90 px-2 py-0.5 text-xs font-semibold text-white">
+                          <EyeOff className="h-3 w-3" /> Oculto
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="p-3">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{story.titulo}</h3>
+                    <p className="truncate text-xs text-gray-500 dark:text-gray-400">{story.descricao}</p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        onClick={() => alternarAtivo(story)}
+                        className="flex-1 rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                      >
+                        {story.ativo ? 'Ocultar' : 'Mostrar'}
+                      </button>
+                      <button
+                        onClick={() => removerStory(story)}
+                        className="rounded-lg bg-red-50 px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-                <div className="p-3">
-                  <h3 className="font-semibold text-gray-900 dark:text-white">{story.titulo}</h3>
-                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">{story.descricao}</p>
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      onClick={() => alternarAtivo(story)}
-                      className="flex-1 rounded-lg bg-gray-100 px-2 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-                    >
-                      {story.ativo ? 'Ocultar' : 'Mostrar'}
-                    </button>
-                    <button
-                      onClick={() => removerStory(story)}
-                      className="rounded-lg bg-red-50 px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
