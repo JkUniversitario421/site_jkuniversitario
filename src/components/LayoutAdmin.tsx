@@ -6,9 +6,9 @@
  * - Barra superior com nome do admin e botão de sair
  * - Área principal onde o conteúdo de cada página é renderizado (children)
  *
- * O layout é responsivo: no mobile a barra lateral fica em uma barra superior.
+ * O layout é responsivo: no mobile a barra lateral fica em uma barra superior com menu drawer.
  */
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   GraduationCap, LayoutDashboard, Building2, Image, LogOut, Menu, X, Bell,
@@ -41,6 +41,27 @@ export default function LayoutAdmin({ children }: { children: ReactNode }) {
     return location.pathname === caminho;
   }
 
+  /** Trava o scroll do body quando o menu mobile está aberto e permite fechar com ESC */
+  useEffect(() => {
+    function tratarTecla(e: KeyboardEvent) {
+      if (e.key === 'Escape' && menuAberto) {
+        setMenuAberto(false);
+      }
+    }
+
+    if (menuAberto) {
+      document.body.style.overflow = 'hidden';
+      window.addEventListener('keydown', tratarTecla);
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', tratarTecla);
+    };
+  }, [menuAberto]);
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-950">
       {/* ====== Barra superior (mobile) ====== */}
@@ -51,20 +72,29 @@ export default function LayoutAdmin({ children }: { children: ReactNode }) {
           </div>
           <span className="font-bold text-gray-900 dark:text-white">Painel Admin</span>
         </div>
-        <button onClick={() => setMenuAberto(!menuAberto)} className="rounded-lg p-2 text-gray-600 dark:text-gray-400">
+        <button
+          onClick={() => setMenuAberto(!menuAberto)}
+          className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-primaria-500"
+          aria-label={menuAberto ? 'Fechar menu de navegação' : 'Abrir menu de navegação'}
+        >
           {menuAberto ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
 
       {/* ====== Menu lateral (mobile overlay) ====== */}
       {menuAberto && (
-        <div className="fixed inset-0 z-20 lg:hidden" onClick={() => setMenuAberto(false)}>
-          <div className="absolute inset-0 bg-black/30" />
+        <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMenuAberto(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
-            className="absolute left-0 top-0 h-full w-64 bg-white p-4 dark:bg-gray-900"
+            className="absolute left-0 top-0 h-full w-64 bg-white p-4 shadow-xl dark:bg-gray-900"
             onClick={(e) => e.stopPropagation()}
           >
-            <MenuLateral estaAtivo={estaAtivo} onItemClick={() => setMenuAberto(false)} onSair={tratarSair} email={usuario?.email ?? ''} />
+            <MenuLateral
+              estaAtivo={estaAtivo}
+              onItemClick={() => setMenuAberto(false)}
+              onSair={tratarSair}
+              email={usuario?.email ?? ''}
+            />
           </div>
         </div>
       )}
@@ -73,7 +103,12 @@ export default function LayoutAdmin({ children }: { children: ReactNode }) {
       <div className="flex">
         {/* Sidebar desktop */}
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900 lg:block">
-          <MenuLateral estaAtivo={estaAtivo} onItemClick={() => {}} onSair={tratarSair} email={usuario?.email ?? ''} />
+          <MenuLateral
+            estaAtivo={estaAtivo}
+            onItemClick={() => {}}
+            onSair={tratarSair}
+            email={usuario?.email ?? ''}
+          />
         </aside>
 
         {/* Conteúdo principal */}
@@ -103,7 +138,7 @@ function MenuLateral({
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className="mb-6 flex items-center gap-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primaria-600 text-white">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primaria-600 text-white shadow-sm">
           <GraduationCap className="h-6 w-6" />
         </div>
         <div>
@@ -116,18 +151,19 @@ function MenuLateral({
       <nav className="flex-1 space-y-1">
         {MENU.map((item) => {
           const Icone = item.icone;
+          const ativo = estaAtivo(item.caminho);
           return (
             <Link
               key={item.caminho}
               to={item.caminho}
               onClick={onItemClick}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                estaAtivo(item.caminho)
-                  ? 'bg-primaria-600 text-white'
+                ativo
+                  ? 'bg-primaria-600 text-white shadow-sm'
                   : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
               }`}
             >
-              <Icone className="h-5 w-5" />
+              <Icone className="h-5 w-5 shrink-0" />
               {item.rotulo}
             </Link>
           );
@@ -136,12 +172,14 @@ function MenuLateral({
 
       {/* Informações do usuário e botão sair */}
       <div className="border-t border-gray-200 pt-4 dark:border-gray-800">
-        <p className="mb-2 truncate text-xs text-gray-500 dark:text-gray-400">{email}</p>
+        <p className="mb-2 truncate text-xs text-gray-500 dark:text-gray-400" title={email}>
+          {email || 'Administrador'}
+        </p>
         <button
           onClick={onSair}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
         >
-          <LogOut className="h-5 w-5" />
+          <LogOut className="h-5 w-5 shrink-0" />
           Sair
         </button>
       </div>

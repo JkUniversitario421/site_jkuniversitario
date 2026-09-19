@@ -2,7 +2,7 @@
  * Componente ModalAcomodacao — modal de detalhes da acomodação
  *
  * Abre em overlay sobre a página e mostra:
- * - Galeria de fotos com carrossel (navegação por setas e indicadores)
+ * - Galeria de fotos com carrossel (navegação por setas, teclado e indicadores)
  * - Tipo, nome, descrição detalhada
  * - Lista de comodidades com ícones
  * - Valor mensal
@@ -14,7 +14,7 @@
  * - onFechar: função para fechar o modal
  */
 import { useEffect, useState } from 'react';
-import { X, ChevronLeft, ChevronRight, Check, MessageCircle, Calendar, MapPin, BedDouble, Home, Building2, CookingPot } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Check, MessageCircle, Calendar, MapPin, BedDouble, Home, Building2, CookingPot, ImageOff } from 'lucide-react';
 import { Acomodacao, TipoAcomodacao, linkWhatsApp, INFO_POUSADA } from '@/lib/tipos';
 
 interface Props {
@@ -33,17 +33,19 @@ const ROTULO_TIPO: Record<TipoAcomodacao, { icone: typeof BedDouble; rotulo: str
 
 export default function ModalAcomodacao({ acomodacao, onFechar }: Props) {
   const [fotoAtual, setFotoAtual] = useState(0);
-  const fotos = acomodacao.fotos;
-  const infoTipo = ROTULO_TIPO[acomodacao.tipo];
+  const fotos = acomodacao?.fotos || [];
+  const infoTipo = ROTULO_TIPO[acomodacao.tipo] || { icone: Home, rotulo: 'Acomodação' };
   const IconeTipo = infoTipo.icone;
 
   /** Vai para a foto anterior no carrossel (circular) */
   function fotoAnterior() {
+    if (fotos.length === 0) return;
     setFotoAtual((i) => (i === 0 ? fotos.length - 1 : i - 1));
   }
 
   /** Vai para a próxima foto no carrossel (circular) */
   function proximaFoto() {
+    if (fotos.length === 0) return;
     setFotoAtual((i) => (i === fotos.length - 1 ? 0 : i + 1));
   }
 
@@ -72,10 +74,15 @@ export default function ModalAcomodacao({ acomodacao, onFechar }: Props) {
   const whatsappLink = linkWhatsApp(acomodacao.nome);
 
   /** Link do WhatsApp para agendar visita */
+  const whatsappNumero = INFO_POUSADA?.whatsapp || '';
   const mensagemVisita = encodeURIComponent(
     `Olá! Vim pelo site do JK Universitário e gostaria de agendar uma visita para conhecer a acomodação "${acomodacao.nome}".`
   );
-  const linkVisita = `https://wa.me/${INFO_POUSADA.whatsapp}?text=${mensagemVisita}`;
+  const linkVisita = `https://wa.me/${whatsappNumero}?text=${mensagemVisita}`;
+
+  const enderecoTexto = INFO_POUSADA?.endereco || '';
+  const bairroTexto = INFO_POUSADA?.bairro || '';
+  const cidadeTexto = INFO_POUSADA?.cidade || '';
 
   return (
     <div
@@ -89,19 +96,26 @@ export default function ModalAcomodacao({ acomodacao, onFechar }: Props) {
         {/* ===== Botão fechar ===== */}
         <button
           onClick={onFechar}
-          className="absolute right-3 top-3 z-30 rounded-full bg-black/40 p-2 text-white transition-colors hover:bg-black/60"
-          aria-label="Fechar"
+          className="absolute right-3 top-3 z-30 rounded-full bg-black/40 p-2 text-white transition-colors hover:bg-black/60 focus:outline-none focus:ring-2 focus:ring-white"
+          aria-label="Fechar modal"
         >
           <X className="h-5 w-5" />
         </button>
 
         {/* ===== Carrossel de fotos ===== */}
         <div className="relative aspect-[16/10] overflow-hidden rounded-t-2xl bg-gray-100 dark:bg-gray-800">
-          <img
-            src={fotos[fotoAtual]}
-            alt={`${acomodacao.nome} - Foto ${fotoAtual + 1}`}
-            className="h-full w-full object-cover"
-          />
+          {fotos.length > 0 ? (
+            <img
+              src={fotos[fotoAtual]}
+              alt={`${acomodacao.nome} - Foto ${fotoAtual + 1}`}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full flex-col items-center justify-center text-gray-400">
+              <ImageOff className="h-12 w-12 mb-2" />
+              <p className="text-sm">Nenhuma foto disponível</p>
+            </div>
+          )}
 
           {/* Setas de navegação do carrossel */}
           {fotos.length > 1 && (
@@ -171,7 +185,7 @@ export default function ModalAcomodacao({ acomodacao, onFechar }: Props) {
           </p>
 
           {/* Comodidades */}
-          {acomodacao.comodidades.length > 0 && (
+          {acomodacao.comodidades && acomodacao.comodidades.length > 0 && (
             <div className="mb-6">
               <h3 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 Comodidades
@@ -214,9 +228,9 @@ export default function ModalAcomodacao({ acomodacao, onFechar }: Props) {
 
           {/* Informação de localização */}
           <div className="mt-4 flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-            <MapPin className="h-4 w-4" />
+            <MapPin className="h-4 w-4 shrink-0" />
             <span>
-              {INFO_POUSADA.endereco}, {INFO_POUSADA.bairro}, {INFO_POUSADA.cidade}
+              {enderecoTexto}{bairroTexto ? `, ${bairroTexto}` : ''}{cidadeTexto ? `, ${cidadeTexto}` : ''}
             </span>
           </div>
         </div>

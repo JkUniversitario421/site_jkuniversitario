@@ -21,7 +21,7 @@ interface Props {
   imagemUrl?: string;
 }
 
-/** URL base do site (em produção seria o domínio real) */
+/** URL base do site em produção */
 const URL_BASE = 'https://jkuniversitario.com.br';
 
 const TITULO_PADRAO = 'JK Universitário - Pousada para Estudantes UFRGS | Viamão/RS';
@@ -71,28 +71,28 @@ export default function SEO({ titulo, descricao, imagemUrl }: Props) {
     definirMeta('twitter:image', imagemFinal);
 
     // ====== Schema.org JSON-LD: LodgingBusiness ======
-    // Marcação estruturada para que o Google entenda que se trata de
-    // um negócio de hospedagem universitária, melhorando o SEO local.
+    const cidadeLocal = INFO_POUSADA?.cidade ? INFO_POUSADA.cidade.split('/')[0] : 'Viamão';
+
     const jsonLd = {
       '@context': 'https://schema.org',
       '@type': 'LodgingBusiness',
-      name: INFO_POUSADA.nome,
+      name: INFO_POUSADA?.nome || 'JK Universitário',
       description: DESCRICAO_PADRAO,
       address: {
         '@type': 'PostalAddress',
-        streetAddress: INFO_POUSADA.endereco,
-        addressLocality: INFO_POUSADA.cidade.split('/')[0],
+        streetAddress: INFO_POUSADA?.endereco || '',
+        addressLocality: cidadeLocal,
         addressRegion: 'RS',
-        postalCode: INFO_POUSADA.cep,
+        postalCode: INFO_POUSADA?.cep || '',
         addressCountry: 'BR',
       },
       geo: {
         '@type': 'GeoCoordinates',
-        latitude: INFO_POUSADA.latitude,
-        longitude: INFO_POUSADA.longitude,
+        latitude: INFO_POUSADA?.latitude || -30.08,
+        longitude: INFO_POUSADA?.longitude || -51.12,
       },
-      telephone: INFO_POUSADA.telefone,
-      email: INFO_POUSADA.email,
+      telephone: INFO_POUSADA?.telefone || '',
+      email: INFO_POUSADA?.email || '',
       url: URL_BASE,
       image: imagemFinal,
       priceRange: 'R$ 1.200 - R$ 2.300',
@@ -116,6 +116,12 @@ export default function SEO({ titulo, descricao, imagemUrl }: Props) {
     script.type = 'application/ld+json';
     script.textContent = JSON.stringify(jsonLd);
     document.head.appendChild(script);
+
+    return () => {
+      // Limpeza opcional do script JSON-LD ao desmontar
+      const elem = document.getElementById('jsonld-schema');
+      if (elem) elem.remove();
+    };
   }, [titulo, descricao, imagemUrl]);
 
   // Este componente não renderiza nada visível — apenas manipula o <head>

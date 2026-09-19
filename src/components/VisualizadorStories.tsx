@@ -65,9 +65,17 @@ export default function VisualizadorStories({ stories, indiceInicial, onFechar }
       const pct = Math.min((decorrido / DURACAO_STORY) * 100, 100);
       setProgresso(pct);
       if (pct >= 100) {
-        avancar();
+        avancadoAutomatico();
       }
     }, 50);
+
+    function avancadoAutomatico() {
+      avancadoAutomaticoHelper();
+    }
+
+    function avancadoAutomaticoHelper() {
+      avancar();
+    }
 
     return () => clearInterval(intervalo);
   }, [indiceAtual, pausado, avancar]);
@@ -107,6 +115,8 @@ export default function VisualizadorStories({ stories, indiceInicial, onFechar }
 
   if (stories.length === 0) return null;
   const story = stories[indiceAtual];
+  // Garante a obtenção do endereço de imagem tanto por `imagem` quanto por `imagem_url`
+  const srcImagem = story.imagem || story.imagem_url;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 animate-fade-in">
@@ -186,7 +196,7 @@ export default function VisualizadorStories({ stories, indiceInicial, onFechar }
       {/* ===== Imagem e conteúdo do story ===== */}
       <div className="relative h-full w-full max-w-md animate-scale-in">
         <img
-          src={story.imagem}
+          src={srcImagem}
           alt={story.titulo}
           className="h-full w-full object-cover"
         />

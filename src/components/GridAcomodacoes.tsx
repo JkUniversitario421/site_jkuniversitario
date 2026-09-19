@@ -2,7 +2,7 @@
  * Componente GridAcomodacoes — grid de acomodações com filtros
  *
  * Funcionamento:
- * - Carrega todas as acomodações do banco de dados (Supabase)
+ * - Carrega todas as acomodações do banco de dados (Firebase Firestore)
  * - Mostra botões de filtro por tipo (Todos, Quartos, JKs, Kitnets, Apartamentos, Áreas Comuns)
  * - Renderiza o grid de cards
  * - Quando um card é clicado, abre o Modal de Detalhes
@@ -10,7 +10,8 @@
  * O filtro é puramente visual (client-side), não faz nova consulta ao banco.
  */
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { Acomodacao, TipoAcomodacao } from '@/lib/tipos';
 import CardAcomodacao from './CardAcomodacao';
 import ModalAcomodacao from './ModalAcomodacao';
@@ -32,24 +33,41 @@ export default function GridAcomodacoes() {
   const [acomodacaoSelecionada, setAcomodacaoSelecionada] = useState<Acomodacao | null>(null);
 
   /**
-   * Carrega as acomodações do banco de dados ao montar o componente.
-   * Ordena por 'ordem' para respeitar a sequência definida no banco.
+   * Carrega as acomodações do Firestore ao montar o componente.
+   * Tenta ordenar pelo campo 'ordem' no banco ou faz ordenação em memória de fallback.
    */
   useEffect(() => {
     async function carregar() {
-      const { data, error } = await supabase
-        .from('acomodacoes')
-        .select('*')
-        .order('ordem', { ascending: true });
+      try {
+        const colecaoRef = collection(db, 'acomodacoes');
+        let docsResult;
 
-      if (error) {
+        try {
+          const q = query(colecaoRef, orderBy('ordem', 'asc'));
+          const snapshot = await getDocs(q);
+          docsResult = snapshot.docs;
+        } catch (indexError) {
+          console.warn('Fallback: buscando acomodações sem ordenação de índice no Firestore.', indexError);
+          const snapshot = await getDocs(colecaoRef);
+          docsResult = snapshot.docs;
+        }
+
+        const lista = docsResult.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        })) as Acomodacao[];
+
+        // Garantia de ordenação client-side caso a propriedade 'ordem' exista
+        lista.sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+
+        setAcomodacoes(lista);
+      } catch (error) {
         console.error('Erro ao carregar acomodações:', error);
+      } finally {
         setCarregando(false);
-        return;
       }
-      setAcomodacoes(data as Acomodacao[]);
-      setCarregando(false);
     }
+
     carregar();
   }, []);
 

@@ -21,9 +21,17 @@ const REGRAS = [
 ];
 
 export default function SecaoInformacoes() {
+  // Endereço seguro para fallback
+  const enderecoTexto = INFO_POUSADA?.endereco || '';
+  const bairroTexto = INFO_POUSADA?.bairro || '';
+  const cidadeTexto = INFO_POUSADA?.cidade || '';
+  const telefoneTexto = INFO_POUSADA?.telefone || '';
+  const whatsappNumero = INFO_POUSADA?.whatsapp || '';
+  const emailTexto = INFO_POUSADA?.email || '';
+
   // Link de embed do Google Maps centrado no endereço
   const mapaSrc = `https://www.google.com/maps?q=${encodeURIComponent(
-    `${INFO_POUSADA.endereco}, ${INFO_POUSADA.bairro}, ${INFO_POUSADA.cidade}`
+    `${enderecoTexto}, ${bairroTexto},${cidadeTexto}`
   )}&output=embed`;
 
   return (
@@ -61,9 +69,9 @@ export default function SecaoInformacoes() {
             </div>
             {/* Endereço completo */}
             <div className="rounded-xl bg-white p-4 ring-1 ring-gray-200/60 dark:bg-gray-800 dark:ring-gray-700/60">
-              <p className="font-semibold text-gray-900 dark:text-white">{INFO_POUSADA.endereco}</p>
+              <p className="font-semibold text-gray-900 dark:text-white">{enderecoTexto}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {INFO_POUSADA.bairro}, {INFO_POUSADA.cidade} — CEP {INFO_POUSADA.cep}
+                {bairroTexto}, {cidadeTexto} — CEP {INFO_POUSADA?.cep || ''}
               </p>
               <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                 A poucos minutos do <strong className="font-semibold text-primaria-700 dark:text-primaria-400">Campus do Vale da UFRGS</strong>,
@@ -105,27 +113,27 @@ export default function SecaoInformacoes() {
               <h3 className="mb-4 text-xl font-bold">Entre em Contato</h3>
               <div className="space-y-3">
                 <a
-                  href={`https://wa.me/${INFO_POUSADA.whatsapp}`}
+                  href={`https://wa.me/${whatsappNumero}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-3 text-white/90 transition-colors hover:text-white"
                 >
                   <MessageCircle className="h-5 w-5" />
-                  <span>WhatsApp: {INFO_POUSADA.telefone}</span>
+                  <span>WhatsApp: {telefoneTexto}</span>
                 </a>
                 <a
-                  href={`tel:${INFO_POUSADA.telefone.replace(/\D/g, '')}`}
+                  href={`tel:${telefoneTexto.replace(/\D/g, '')}`}
                   className="flex items-center gap-3 text-white/90 transition-colors hover:text-white"
                 >
                   <Phone className="h-5 w-5" />
-                  <span>Telefone: {INFO_POUSADA.telefone}</span>
+                  <span>Telefone: {telefoneTexto}</span>
                 </a>
                 <a
-                  href={`mailto:${INFO_POUSADA.email}`}
+                  href={`mailto:${emailTexto}`}
                   className="flex items-center gap-3 text-white/90 transition-colors hover:text-white"
                 >
                   <Mail className="h-5 w-5" />
-                  <span>{INFO_POUSADA.email}</span>
+                  <span>{emailTexto}</span>
                 </a>
               </div>
             </div>

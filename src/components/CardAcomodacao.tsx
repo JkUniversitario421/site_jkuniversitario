@@ -13,6 +13,7 @@
  * - acomodacao: dados da acomodação
  * - onVerDetalhes: função chamada ao clicar em "Ver Detalhes"
  */
+import { type KeyboardEvent } from 'react';
 import { BedDouble, Home, Building2, CookingPot, CheckCircle2, XCircle, Clock, ArrowRight } from 'lucide-react';
 import { Acomodacao, TipoAcomodacao, StatusAcomodacao } from '@/lib/tipos';
 
@@ -39,25 +40,40 @@ const INFO_STATUS: Record<StatusAcomodacao, { icone: typeof CheckCircle2; classe
 
 /** Formata valor em reais (R$) */
 function formatarValor(valor: number | null): string {
-  if (valor === null) return 'Uso comum';
-  return `R$ ${valor.toFixed(0).replace('.', ',')}/mês`;
+  if (valor === null || valor === undefined) return 'Uso comum';
+  return `${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(valor)}/mês`;
 }
 
 export default function CardAcomodacao({ acomodacao, onVerDetalhes }: Props) {
-  const infoTipo = INFO_TIPO[acomodacao.tipo];
-  const infoStatus = INFO_STATUS[acomodacao.status];
+  const infoTipo = INFO_TIPO[acomodacao.tipo] ?? { icone: Building2, rotulo: 'Acomodação' };
+  const infoStatus = INFO_STATUS[acomodacao.status] ?? { icone: Clock, classe: 'tag-reservado', rotulo: 'Indisponível' };
   const IconeTipo = infoTipo.icone;
   const IconeStatus = infoStatus.icone;
 
+  function tratarKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onVerDetalhes();
+    }
+  }
+
   return (
     <article
-      className="card-base group cursor-pointer overflow-hidden hover:shadow-xl hover:ring-primaria-300/50 dark:hover:ring-primaria-700/50"
+      tabIndex={0}
+      role="button"
+      aria-label={`Ver detalhes da acomodação ${acomodacao.nome}`}
+      className="card-base group cursor-pointer overflow-hidden transition-all focus:outline-none focus:ring-2 focus:ring-primaria-500 hover:shadow-xl hover:ring-primaria-300/50 dark:hover:ring-primaria-700/50"
       onClick={onVerDetalhes}
+      onKeyDown={tratarKeyDown}
     >
       {/* ===== Foto principal com overlay da tag de status ===== */}
-      <div className="relative aspect-[4/3] overflow-hidden">
+      <div className="relative aspect-[4/3] overflow-hidden bg-gray-100 dark:bg-gray-800">
         <img
-          src={acomodacao.fotos[0] ?? 'https://images.pexels.com/photos/8142976/pexels-photo-8142976.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'}
+          src={
+            acomodacao.fotos && acomodacao.fotos.length > 0
+              ? acomodacao.fotos[0]
+              : 'https://images.pexels.com/photos/8142976/pexels-photo-8142976.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'
+          }
           alt={acomodacao.nome}
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           loading="lazy"
@@ -65,14 +81,14 @@ export default function CardAcomodacao({ acomodacao, onVerDetalhes }: Props) {
         {/* Tag de status sobreposta no canto superior esquerdo */}
         <div className="absolute left-3 top-3">
           <span className={infoStatus.classe}>
-            <IconeStatus className="h-3 w-3" />
+            <IconeStatus className="h-3 w-3 shrink-0" />
             {infoStatus.rotulo}
           </span>
         </div>
         {/* Tipo de acomodação no canto inferior esquerdo */}
         <div className="absolute bottom-3 left-3">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1 text-xs font-semibold text-white backdrop-blur-sm">
-            <IconeTipo className="h-3.5 w-3.5" />
+            <IconeTipo className="h-3.5 w-3.5 shrink-0" />
             {infoTipo.rotulo}
           </span>
         </div>
@@ -97,6 +113,7 @@ export default function CardAcomodacao({ acomodacao, onVerDetalhes }: Props) {
               e.stopPropagation();
               onVerDetalhes();
             }}
+            tabIndex={-1}
             className="inline-flex items-center gap-1 text-sm font-semibold text-destaque-600 transition-colors hover:text-destaque-700 dark:text-destaque-400"
           >
             Ver Detalhes
