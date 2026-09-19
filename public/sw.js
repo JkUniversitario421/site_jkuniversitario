@@ -52,8 +52,14 @@ self.addEventListener('fetch', (event) => {
   // Ignora requisições que não são GET (POST, PUT, etc. vão direto para a rede)
   if (event.request.method !== 'GET') return;
 
-  // Ignora requisições para o Supabase (sempre buscam dados frescos)
-  if (event.request.url.includes('supabase.co')) return;
+  // Ignora requisições para APIs do Firebase (Firestore, Auth e Storage para buscar sempre dados em tempo real)
+  if (
+    event.request.url.includes('firestore.googleapis.com') ||
+    event.request.url.includes('firebasestorage.googleapis.com') ||
+    event.request.url.includes('identitytoolkit.googleapis.com')
+  ) {
+    return;
+  }
 
   // Ignora requisições para o Google Maps
   if (event.request.url.includes('google.com/maps')) return;
