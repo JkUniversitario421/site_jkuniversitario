@@ -14,6 +14,20 @@ import { GraduationCap, Mail, Lock, Loader2, ArrowRight, AlertCircle } from 'luc
 import { useAuth } from '@/contexto/ContextoAuth';
 import SEO from '@/components/SEO';
 
+/** Traduz códigos de erro do Firebase Auth para mensagens amigáveis */
+function tratarErroFirebase(erroMsg: string): string {
+  if (erroMsg.includes('auth/invalid-credential') || erroMsg.includes('auth/user-not-found') || erroMsg.includes('auth/wrong-password')) {
+    return 'E-mail ou senha incorretos.';
+  }
+  if (erroMsg.includes('auth/too-many-requests')) {
+    return 'Muitas tentativas sem sucesso. Aguarde alguns instantes e tente novamente.';
+  }
+  if (erroMsg.includes('auth/invalid-email')) {
+    return 'E-mail em formato inválido.';
+  }
+  return erroMsg || 'Erro ao realizar login. Verifique suas credenciais.';
+}
+
 export default function PaginaLogin() {
   const { entrar } = useAuth();
   const navigate = useNavigate();
@@ -30,16 +44,21 @@ export default function PaginaLogin() {
     setErro(null);
     setEnviando(true);
 
-    const { erro: erroLogin } = await entrar(email, senha);
+    try {
+      const { erro: erroLogin } = await entrar(email, senha);
 
-    if (erroLogin) {
-      setErro(erroLogin);
+      if (erroLogin) {
+        setErro(tratarErroFirebase(erroLogin));
+        setEnviando(false);
+        return;
+      }
+
+      // Login bem-sucedido: redireciona para o dashboard
+      navigate('/admin/dashboard');
+    } catch (err: any) {
+      setErro(tratarErroFirebase(err?.message || ''));
       setEnviando(false);
-      return;
     }
-
-    // Login bem-sucedido: redireciona para o dashboard
-    navigate('/admin/dashboard');
   }
 
   return (

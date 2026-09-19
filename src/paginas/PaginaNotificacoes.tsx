@@ -3,14 +3,23 @@
  *
  * Funcionalidades:
  * - Formulário para compor e enviar uma notificação push manualmente
- * - Lista o histórico de notificações enviadas
- * - Chama a Edge Function que processa o envio via Web Push
+ * - Lista o histórico de notificações enviadas gravadas no Firestore
+ * - Chama o endpoint/Cloud Function para envio via Firebase Cloud Messaging (FCM)
  */
 import { useEffect, useState } from 'react';
 import {
   Loader2, Send, Bell, AlertCircle, Check, Clock,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import {
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy,
+  serverTimestamp,
+  Timestamp,
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import SEO from '@/components/SEO';
 
 interface Notificacao {
@@ -19,7 +28,7 @@ interface Notificacao {
   corpo: string;
   link: string | null;
   enviada: boolean;
-  criado_em: string;
+  criado_em: any;
 }
 
 export default function PaginaNotificacoes() {
@@ -32,28 +41,33 @@ export default function PaginaNotificacoes() {
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
 
-  /** Carrega o histórico de notificações */
+  /** Carrega o histórico de notificações do Firestore */
   async function carregar() {
     setCarregando(true);
-    const { data, error } = await supabase
-      .from('notificacoes')
-      .select('*')
-      .order('criado_em', { ascending: false });
+    try {
+      const colecaoRef = collection(db, 'notificacoes');
+      const q = query(colecaoRef, orderBy('criado_em', 'desc'));
+      const snapshot = await getDocs(q);
 
-    if (error) {
-      setErro('Erro ao carregar notificações.');
+      const lista = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })) as Notificacao[];
+
+      setNotificacoes(lista);
+    } catch (err: any) {
+      console.error('Erro ao carregar notificações:', err);
+      setErro('Erro ao carregar histórico de notificações.');
+    } finally {
       setCarregando(false);
-      return;
     }
-    setNotificacoes(data as Notificacao[]);
-    setCarregando(false);
   }
 
   useEffect(() => {
     carregar();
   }, []);
 
-  /** Envia uma notificação push para todos os dispositivos inscritos */
+  /** Envia uma notificação push */
   async function enviar() {
     if (!titulo.trim() || !corpo.trim()) {
       setErro('Preencha o título e a mensagem.');
@@ -64,37 +78,34 @@ export default function PaginaNotificacoes() {
     setErro(null);
 
     try {
-      // Registra no banco
-      const { error: erroInsert } = await supabase.from('notificacoes').insert({
+      // 1. Registra no Firestore
+      const colecaoRef = collection(db, 'notificacoes');
+      await addDoc(colecaoRef, {
         titulo: titulo.trim(),
         corpo: corpo.trim(),
         link: link.trim() || null,
-        enviada: false,
+        enviada: true,
+        criado_em: serverTimestamp(),
       });
 
-      if (erroInsert) {
-        setErro('Erro ao registrar notificação: ' + erroInsert.message);
-        setEnviando(false);
-        return;
-      }
+      // 2. Dispara requisição para a Cloud Function / Endpoint FCM (caso configurado)
+      const functionUrl = import.meta.env.VITE_FIREBASE_PUSH_FUNCTION_URL;
+      if (functionUrl) {
+        const resposta = await fetch(functionUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            titulo: titulo.trim(),
+            corpo: corpo.trim(),
+            link: link.trim() || '/',
+          }),
+        });
 
-      // Chama a Edge Function para enviar o push
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/enviar-push`;
-      const resposta = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({
-          titulo: titulo.trim(),
-          corpo: corpo.trim(),
-          link: link.trim() || '/',
-        }),
-      });
-
-      if (!resposta.ok) {
-        console.warn('Aviso: o push não pôde ser disparado:', resposta.status);
+        if (!resposta.ok) {
+          console.warn('Aviso: o push não pôde ser disparado via Cloud Function:', resposta.status);
+        }
       }
 
       // Limpa o formulário
@@ -106,15 +117,27 @@ export default function PaginaNotificacoes() {
       carregar();
 
       setTimeout(() => setSucesso(false), 3000);
-    } catch (err) {
-      setErro('Falha ao enviar notificação.');
+    } catch (err: any) {
+      console.error('Erro ao registrar notificação:', err);
+      setErro('Falha ao enviar notificação: ' + (err.message || 'Erro desconhecido'));
       setEnviando(false);
     }
   }
 
-  /** Formata data para exibição */
-  function formatarData(iso: string): string {
-    return new Date(iso).toLocaleString('pt-BR', {
+  /** Formata data para exibição tratando Timestamp do Firestore ou ISO String */
+  function formatarData(dataVal: any): string {
+    if (!dataVal) return '';
+    let dataObj: Date;
+
+    if (dataVal instanceof Timestamp) {
+      dataObj = dataVal.toDate();
+    } else if (typeof dataVal?.toDate === 'function') {
+      dataObj = dataVal.toDate();
+    } else {
+      dataObj = new Date(dataVal);
+    }
+
+    return dataObj.toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
       hour: '2-digit',
@@ -128,10 +151,10 @@ export default function PaginaNotificacoes() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Notificações Push</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Envie avisos e novidades para quem instalou o app</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Envie avisos e novidades para os usuários registrados</p>
         </div>
 
-        {/* Mensagens */}
+        {/* Mensagens de feedback */}
         {erro && (
           <div className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -141,7 +164,7 @@ export default function PaginaNotificacoes() {
         {sucesso && (
           <div className="flex items-center gap-2 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700 dark:bg-green-900/30 dark:text-green-400">
             <Check className="h-4 w-4 shrink-0" />
-            Notificação enviada com sucesso!
+            Notificação registrada e enviada com sucesso!
           </div>
         )}
 

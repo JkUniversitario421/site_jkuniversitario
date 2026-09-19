@@ -4,8 +4,8 @@
  * Funcionalidades:
  * - Lista todas as acomodações em uma tabela/grid
  * - Permite editar nome, descrição, valor, status, comodidades e fotos
- * - Upload de fotos para o bucket de Storage do Supabase
- * - Alterações salvas em tempo real no banco de dados
+ * - Upload de fotos para o Firebase Storage
+ * - Alterações salvas em tempo real no banco de dados Firestore
  *
  * Cada acomodação abre em um modal de edição ao clicar em "Editar".
  */
@@ -13,7 +13,20 @@ import { useEffect, useState } from 'react';
 import {
   Loader2, Pencil, Save, X, Upload, Plus, Trash2, Check, AlertCircle,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { 
+  collection, 
+  getDocs, 
+  doc, 
+  updateDoc, 
+  query, 
+  orderBy 
+} from 'firebase/firestore';
+import { 
+  ref, 
+  uploadBytes, 
+  getDownloadURL 
+} from 'firebase/storage';
+import { db, storage } from '@/lib/firebase';
 import {
   Acomodacao, TipoAcomodacao, StatusAcomodacao,
 } from '@/lib/tipos';
@@ -43,79 +56,80 @@ export default function PaginaGerenciarAcomodacoes() {
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState(false);
 
-  /** Carrega todas as acomodações do banco */
+  /** Carrega todas as acomodações do Firestore */
   async function carregar() {
     setCarregando(true);
-    const { data, error } = await supabase
-      .from('acomodacoes')
-      .select('*')
-      .order('ordem', { ascending: true });
+    try {
+      const colecaoRef = collection(db, 'acomodacoes');
+      const q = query(colecaoRef, orderBy('ordem', 'asc'));
+      const snapshot = await getDocs(q);
 
-    if (error) {
+      const lista = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })) as Acomodacao[];
+
+      setAcomodacoes(lista);
+    } catch (err: any) {
+      console.error('Erro ao carregar acomodações:', err);
       setErro('Erro ao carregar acomodações.');
+    } finally {
       setCarregando(false);
-      return;
     }
-    setAcomodacoes(data as Acomodacao[]);
-    setCarregando(false);
   }
 
   useEffect(() => {
     carregar();
   }, []);
 
-  /** Salva as alterações de uma acomodação no banco */
+  /** Salva as alterações de uma acomodação no Firestore */
   async function salvar(acomodacao: Acomodacao) {
     setSalvando(true);
     setErro(null);
 
-    const { error } = await supabase
-      .from('acomodacoes')
-      .update({
+    try {
+      const docRef = doc(db, 'acomodacoes', acomodacao.id);
+      await updateDoc(docRef, {
         nome: acomodacao.nome,
         descricao: acomodacao.descricao,
         valor: acomodacao.valor,
         status: acomodacao.status,
         fotos: acomodacao.fotos,
         comodidades: acomodacao.comodidades,
-      })
-      .eq('id', acomodacao.id);
+      });
 
-    if (error) {
-      setErro('Erro ao salvar: ' + error.message);
+      setSucesso(true);
       setSalvando(false);
-      return;
+      setEditando(null);
+      carregar();
+
+      // Limpa a mensagem de sucesso após 3 segundos
+      setTimeout(() => setSucesso(false), 3000);
+    } catch (err: any) {
+      console.error('Erro ao salvar no Firestore:', err);
+      setErro('Erro ao salvar: ' + (err.message || 'Erro desconhecido'));
+      setSalvando(false);
     }
-
-    setSucesso(true);
-    setSalvando(false);
-    setEditando(null);
-    carregar();
-
-    // Limpa a mensagem de sucesso após 3 segundos
-    setTimeout(() => setSucesso(false), 3000);
   }
 
-  /** Faz upload de uma foto para o bucket de Storage */
+  /** Faz upload de uma foto para o Firebase Storage */
   async function subirFoto(arquivo: File, acomodacaoId: string): Promise<string | null> {
-    const ext = arquivo.name.split('.').pop();
-    const nomeArquivo = `${acomodacaoId}/${Date.now()}.${ext}`;
+    try {
+      const ext = arquivo.name.split('.').pop();
+      const caminhoFoto = `fotos-jk/${acomodacaoId}/${Date.now()}.${ext}`;
+      const storageRef = ref(storage, caminhoFoto);
 
-    const { error } = await supabase.storage
-      .from('fotos-jk')
-      .upload(nomeArquivo, arquivo);
+      // Envia o arquivo de imagem para o Firebase Storage
+      await uploadBytes(storageRef, arquivo);
 
-    if (error) {
-      setErro('Erro ao subir foto: ' + error.message);
+      // Obtém a URL pública de acesso à imagem
+      const urlPublica = await getDownloadURL(storageRef);
+      return urlPublica;
+    } catch (err: any) {
+      console.error('Erro ao subir foto para o Storage:', err);
+      setErro('Erro ao subir foto: ' + (err.message || 'Erro desconhecido'));
       return null;
     }
-
-    // Retorna a URL pública da foto
-    const { data } = supabase.storage
-      .from('fotos-jk')
-      .getPublicUrl(nomeArquivo);
-
-    return data.publicUrl;
   }
 
   return (
@@ -154,7 +168,7 @@ export default function PaginaGerenciarAcomodacoes() {
                 <div key={acomod.id} className="card-base flex items-center gap-4 p-4">
                   {/* Thumbnail */}
                   <img
-                    src={acomod.fotos[0] ?? 'https://images.pexels.com/photos/8142976/pexels-photo-8142976.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'}
+                    src={acomod.fotos?.[0] ?? 'https://images.pexels.com/photos/8142976/pexels-photo-8142976.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'}
                     alt={acomod.nome}
                     className="h-16 w-16 rounded-lg object-cover"
                   />
@@ -168,7 +182,7 @@ export default function PaginaGerenciarAcomodacoes() {
                     <p className="truncate text-sm text-gray-500 dark:text-gray-400">{acomod.descricao}</p>
                     <div className="mt-1 flex items-center gap-2">
                       {infoStatus && <span className={infoStatus.classe}>{infoStatus.rotulo}</span>}
-                      {acomod.valor !== null && (
+                      {acomod.valor !== null && acomod.valor !== undefined && (
                         <span className="text-xs text-gray-400">R$ {acomod.valor.toFixed(0).replace('.', ',')}/mês</span>
                       )}
                     </div>
@@ -229,18 +243,18 @@ function ModalEdicao({
   /** Adiciona uma comodidade à lista */
   function adicionarComodidade() {
     if (!novaComodidade.trim()) return;
-    atualizar('comodidades', [...form.comodidades, novaComodidade.trim()]);
+    atualizar('comodidades', [...(form.comodidades || []), novaComodidade.trim()]);
     setNovaComodidade('');
   }
 
   /** Remove uma comodidade da lista */
   function removerComodidade(indice: number) {
-    atualizar('comodidades', form.comodidades.filter((_, i) => i !== indice));
+    atualizar('comodidades', (form.comodidades || []).filter((_, i) => i !== indice));
   }
 
   /** Remove uma foto da lista */
   function removerFoto(indice: number) {
-    atualizar('fotos', form.fotos.filter((_, i) => i !== indice));
+    atualizar('fotos', (form.fotos || []).filter((_, i) => i !== indice));
   }
 
   /** Processa o upload de uma nova foto */
@@ -251,7 +265,7 @@ function ModalEdicao({
     setSubindoFoto(true);
     const url = await onSubirFoto(arquivo, form.id);
     if (url) {
-      atualizar('fotos', [...form.fotos, url]);
+      atualizar('fotos', [...(form.fotos || []), url]);
     }
     setSubindoFoto(false);
     // Limpa o input para permitir reupload do mesmo arquivo
@@ -325,7 +339,7 @@ function ModalEdicao({
           <div>
             <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">Fotos</label>
             <div className="flex flex-wrap gap-2">
-              {form.fotos.map((foto, i) => (
+              {(form.fotos || []).map((foto, i) => (
                 <div key={i} className="relative group">
                   <img src={foto} alt={`Foto ${i + 1}`} className="h-20 w-20 rounded-lg object-cover" />
                   <button
@@ -355,7 +369,7 @@ function ModalEdicao({
           <div>
             <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">Comodidades</label>
             <div className="flex flex-wrap gap-2">
-              {form.comodidades.map((c, i) => (
+              {(form.comodidades || []).map((c, i) => (
                 <span key={i} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
                   {c}
                   <button onClick={() => removerComodidade(i)} className="text-gray-400 hover:text-red-500">
