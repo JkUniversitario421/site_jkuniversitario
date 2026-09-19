@@ -14,7 +14,8 @@
  * Além disso, gerencia o estado do visualizador de stories (tela cheia).
  */
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { Story } from '@/lib/tipos';
 import SEO from '@/components/SEO';
 import Cabecalho from '@/components/Cabecalho';
@@ -33,25 +34,36 @@ export default function PaginaPublica() {
   const [indiceStoryAberto, setIndiceStoryAberto] = useState<number | null>(null);
 
   /**
-   * Carrega os stories ativos do banco ao montar o componente.
-   * Filtra apenas os ativos e ordena pelos mais recentes.
+   * Carrega os stories ativos do Firestore ao montar o componente.
+   * Filtra apenas os ativos (ativo == true) e ordena pelos mais recentes.
    */
   useEffect(() => {
     async function carregarStories() {
-      const { data, error } = await supabase
-        .from('stories')
-        .select('*')
-        .eq('ativo', true)
-        .order('criado_em', { ascending: false });
+      try {
+        // Consulta a coleção 'stories' no Firebase Firestore
+        const colecaoStories = collection(db, 'stories');
+        const consulta = query(
+          colecaoStories,
+          where('ativo', '==', true),
+          orderBy('criado_em', 'desc')
+        );
 
-      if (error) {
-        console.error('Erro ao carregar stories:', error);
+        const snapshot = await getDocs(consulta);
+        
+        // Mapeia os documentos retornados do Firestore para o tipo Story
+        const listaStories = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Story[];
+
+        setStories(listaStories);
+      } catch (error) {
+        console.error('Erro ao carregar stories do Firebase:', error);
+      } finally {
         setCarregandoStories(false);
-        return;
       }
-      setStories(data as Story[]);
-      setCarregandoStories(false);
     }
+
     carregarStories();
   }, []);
 
