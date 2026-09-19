@@ -43,7 +43,7 @@ export default function Cabecalho() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         {/* ===== Logo e nome da pousada ===== */}
         <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primaria-600 text-white shadow-sm">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primaria-600 text-white shadow-sm">
             <GraduationCap className="h-6 w-6" />
           </div>
           <div className="hidden sm:block">
@@ -64,10 +64,10 @@ export default function Cabecalho() {
           {instalavel && (
             <button
               onClick={instalarApp}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-secundaria-500 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-secundaria-600 active:scale-95 sm:text-sm"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-secundaria-500 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-secundaria-600 active:scale-95 focus:outline-none focus:ring-2 focus:ring-secundaria-400 sm:text-sm"
               aria-label="Instalar aplicativo"
             >
-              <Download className="h-4 w-4" />
+              <Download className="h-4 w-4 shrink-0" />
               <span className="hidden sm:inline">Instalar App</span>
               <span className="sm:hidden">Instalar</span>
             </button>
@@ -76,11 +76,11 @@ export default function Cabecalho() {
           {/* Botão de alternância de tema — cicla entre Claro, Escuro e P&B */}
           <button
             onClick={proximoTema}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-200 active:scale-95 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-3 py-2 text-xs font-semibold text-gray-700 transition-all hover:bg-gray-200 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primaria-500 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
             aria-label={`Tema atual: ${temaAtual.rotulo}. Clique para alternar.`}
             title={`Tema: ${temaAtual.rotulo}`}
           >
-            <IconeTema className="h-4 w-4" />
+            <IconeTema className="h-4 w-4 shrink-0" />
             <span className="hidden sm:inline">{temaAtual.rotulo}</span>
           </button>
         </div>
